@@ -1,8 +1,15 @@
 import React from 'react';
 import axios from 'axios';
 import * as antd from 'antd';
+import firebase from 'firebase/app';
 
 import { Notification } from './components/Notification';
+import {
+  ApolloClient,
+  InMemoryCache,
+  NormalizedCacheObject,
+  DefaultOptions,
+} from '@apollo/client';
 
 interface AppContextProps {
   loginPage: string;
@@ -15,13 +22,16 @@ interface AppContextProps {
   setIsAdmin: (value: boolean) => void;
 
   fetch: (
-    method: 'get' | 'post' | 'put' | 'delete',
+    method: 'get' | 'post' | 'put' | 'delete' | 'patch',
     url: string,
     param?: any,
   ) => Promise<any>;
 
   login: (account: string, password: string) => Promise<any>;
   logout: () => Promise<void>;
+  redirect: () => Promise<void>;
+
+  apolloClient: ApolloClient<NormalizedCacheObject>;
 }
 
 const AppContext = React.createContext<AppContextProps>(undefined!);
@@ -29,6 +39,11 @@ const AppContext = React.createContext<AppContextProps>(undefined!);
 interface AppProviderProps {
   children: React.ReactNode;
 }
+
+// Initialize Firebase
+const firebaseConfig = {};
+firebase.initializeApp(firebaseConfig);
+export const app = firebase;
 
 const AppProvider = ({ children }: AppProviderProps) => {
   const [loginPage] = React.useState('/#/login');
@@ -41,12 +56,30 @@ const AppProvider = ({ children }: AppProviderProps) => {
   /////////////////////////////////////////////////////
 
   React.useEffect(() => {
+    redirect();
     axios.defaults.baseURL = '';
     axios.defaults.headers.common['Content-Type'] = 'application/json';
   }, []);
 
+  const defaultOptions: DefaultOptions = {
+    watchQuery: {
+      fetchPolicy: 'no-cache',
+      errorPolicy: 'ignore',
+    },
+    query: {
+      fetchPolicy: 'no-cache',
+      errorPolicy: 'all',
+    },
+  };
+
+  const apolloClient = new ApolloClient({
+    uri: '/graphql',
+    cache: new InMemoryCache(),
+    defaultOptions: defaultOptions,
+  });
+
   const fetch = async (
-    method: 'get' | 'post' | 'put' | 'delete',
+    method: 'get' | 'post' | 'put' | 'delete' | 'patch',
     url: string,
     param?: any,
   ) => {
@@ -59,6 +92,7 @@ const AppProvider = ({ children }: AppProviderProps) => {
         data: param,
       });
       console.log('response', response.data);
+
       if (response.data.errorCode === 999999) {
         window.location.href = loginPage;
         return null;
@@ -85,8 +119,6 @@ const AppProvider = ({ children }: AppProviderProps) => {
 
     setAccount(account);
 
-    console.log(account);
-
     const data = { errorCode: '0' };
 
     if (data) {
@@ -104,6 +136,13 @@ const AppProvider = ({ children }: AppProviderProps) => {
   const logout = async () => {
     await fetch('post', '/api/account/logout', {});
     window.location.href = loginPage;
+  };
+
+  const redirect = async () => {
+    let data = await fetch('post', '/api/admin/redirect');
+    if (!data) {
+      window.location.href = loginPage;
+    }
   };
 
   /////////////////////////////////////////////////////
@@ -124,6 +163,9 @@ const AppProvider = ({ children }: AppProviderProps) => {
 
         login,
         logout,
+        redirect,
+
+        apolloClient,
       }}
     >
       {modal && (
@@ -134,7 +176,7 @@ const AppProvider = ({ children }: AppProviderProps) => {
           footer={null}
           closable={false}
         >
-          {modal !== null ? modal : <div />}
+          {modal}
         </antd.Modal>
       )}
 

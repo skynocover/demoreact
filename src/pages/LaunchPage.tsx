@@ -64,7 +64,7 @@ const LoginPage = () => {
             className="col-4 m-4 text-center font-weight-bold"
             style={{ fontSize: '20px' }}
           >
-            Guanda 後台管理系統
+            React Demo
           </div>
         </div>
 
